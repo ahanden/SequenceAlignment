@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<style>
+		table, tr, td, th {
+			border: 1px solid black;
+			border-collapse: collapse;
+		}
+		td, th {
+			width: 2em;
+			height: 2em;
+		}
+		td {
+			padding-left: 16px;
+			text-align: right;
+		}
+		td {
+			background-repeat: no-repeat;
+			background-position: 5px center;
+		}
+		.arrow-left {
+			background-image: url("img/left.png");
+		}
+		.arrow-up {
+			background-image: url("img/up.png");
+		}
+		.arrow-diagonal {
+			background-image: url("img/diag.png");
+		}
+		.arrow-left.arrow-up {
+			background-image: url("img/left-up.png");
+		}
+		.arrow-left.arrow-diagonal {
+			background-image: url("img/left-diag.png");
+		}
+		.arrow-diagonal.arrow-up {
+			background-image: url("img/diag-up.png");
+		}
+		.arrow-left.arrow-diagonal.arrow-up {
+			background-image: url("img/all.png");
+		}
+		#matrix {
+			margin-top: 10px;
+			margin-bottom: 10px;
+		}
+	</style>
+</head>
+<body>
+	
+	First sequence: <input type="text" id="seq1" placeholder="Sequence 1" /><br>
+	Second sequence: <input type="text" id="seq2" placeholder="Sequence 2" /><br>
+	Match value: <input type="number" id="match-score" value="1" /><br>
+	Mismatch value: <input type="number" id="mismatch-score" value="-1" /><br>
+	Global:<input type="radio" name="alignment-type" value="global"  checked="checked" />
+	Local:<input type="radio" name="alignment-type" value="local" /><br>
+	<button type="button" id="submit">Align</button>
+	
+	<table id="matrix">
+	</table>
+	<div id="alignments">
+	</div>
+	
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+	<script>
+		$(document).on("click","#submit",function(){
+			// Clear the matrix
+			$("#matrix").empty();
+		
+			// Capture and clean the sequences from the user input
+			var seq1 = $("#seq1").val().trim().toUpperCase();
+			var seq2 = $("#seq2").val().trim().toUpperCase();
+			
+			// Quit if either sequence is blank
+			if(seq1.length == 0 || seq2.length == 0)
+				return;
+				
+			// Get the values for match and mismatch
+			var match_val = parseInt($("#match-score").val());
+			var mismatch_val = parseInt($("#mismatch-score").val());
+			
+			// Get the matrix dimensions
+			var width = seq1.length + 1;
+			var height = seq2.length + 2;
+			
+			// Add the first sequence to the top row
+			var header = $("<tr></tr>");
+			var h = seq1.split("");
+			h.unshift("","-");
+			h.forEach(function(d,i){
+				header.append("<th>"+d+"</th>");
+			});
+			$("#matrix").append(header);
+			
+			// Add the second sequence to the first column
+			var h = seq2.split("");
+			h.unshift("-");
+			h.forEach(function(d,i){
+				var row = $("<tr></tr>");
+				row.append("<th>"+d+"</th>");
+				for(var i = 0; i < width; i++)
+					row.append("<td></td>");
+				$("#matrix").append(row);
+			});
+			if($("input[name='alignment-type']:checked").val() == "global")
+				global(seq1,seq2,match_val,mismatch_val);
+			else
+				local(seq1,seq2,match_val,mismatch_val);
+		});
+		
+		function global(seq1,seq2,match_val,mismatch_val){
+			var width = seq1.length + 1;
+		
+			// Initialize matrix
+			$("#matrix tr:nth-child(2) td").each(function(i,d){
+				$(d).html("<span class='val'>"+(i*mismatch_val)+"</span>");
+			});
+			$("#matrix tr + tr td:nth-child(2)").each(function(i,d){
+				$(d).html("<span class='val'>"+(i*mismatch_val)+"</span>");
+			});
+			
+			// Fill matrix
+			var cells = $("#matrix tr:nth-child(1) ~ tr td");
+			cells.each(function(i,d){
+				if(!$(d).html()) {
+					var ins = parseInt($(cells[i-1]).find(".val").html()) + mismatch_val;
+					var del = parseInt($(cells[i-width]).find(".val").html()) + mismatch_val;
+					var match = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() == $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() ? parseInt($(cells[i-width-1]).find(".val").html()) + match_val : parseInt($(cells[i-width-1]).find(".val").html()) + mismatch_val;
+					var max = Math.max(ins,del,match)
+					var val = $("<span></span>")
+						.html(max)
+						.addClass("val");
+					if(max == ins)
+						$(d).addClass("arrow-left");
+					if(max == del)
+						$(d).addClass("arrow-up");
+					if(max == match)
+						$(d).addClass("arrow-diagonal");
+					$(d).append(val);
+				}
+			});
+			
+			// Traceback
+			var i = cells.length - 1;
+			var align_1 = "";
+			var align_2 = "";
+			while($(cells[i]).is("[class*='arrow']")) {
+				if($(cells[i]).hasClass("arrow-left")) {
+					align_1 = "-"+align_1;
+					align_2 = $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() + align_2;
+					i--;
+				}
+				else if($(cells[i]).hasClass("arrow-up")) {
+					align_1 = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() + align_1;
+					align_2 = "-"+align_2;
+					i -= width;
+				}
+				else if($(cells[i]).hasClass("arrow-diagonal")) {
+					align_1 = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() + align_1;
+					align_2 = $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() + align_2;
+					i -= width + 1;
+				}
+			}
+			$("#alignments").html(align_1+"<br>"+align_2);
+		}
+		function local(seq1,seq2,match_val,mismatch_val){
+			var width = seq1.length + 1;
+		
+			//Initialize matrix
+			$("#matrix tr:nth-child(2) td").each(function(i,d){
+				$(d).html("<span class='val'>0</span>");
+			});
+			$("#matrix tr + tr td:nth-child(2)").each(function(i,d){
+				$(d).html("<span class='val'>0</span>");
+			});
+			
+			// Fill the matrix
+			var cells = $("#matrix tr:nth-child(1) ~ tr td");
+			cells.each(function(i,d){
+				if(!$(d).html()) {
+					var ins = parseInt($(cells[i-1]).find(".val").html()) + mismatch_val;
+					var del = parseInt($(cells[i-width]).find(".val").html()) + mismatch_val;
+					var match = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() == $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() ? parseInt($(cells[i-width-1]).find(".val").html()) + match_val : parseInt($(cells[i-width-1]).find(".val").html()) + mismatch_val;
+					var max = Math.max(ins,del,match,0)
+					var val = $("<span></span>")
+						.html(max)
+						.addClass("val");
+					$(d).append(val);
+					if(max != 0) {
+						if(max == ins)
+							$(d).addClass("arrow-left");
+						if(max == del)
+							$(d).addClass("arrow-up");
+						if(max == match)
+							$(d).addClass("arrow-diagonal");
+					}
+				}
+			});
+		}
+		// Report alignments
+	</script>
+</body>
+</html>

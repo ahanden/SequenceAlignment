@@ -2,6 +2,9 @@
 <html>
 <head>
 	<style>
+		body{
+			font-family: arial;
+		}
 		table, tr, td, th {
 			border: 1px solid black;
 			border-collapse: collapse;
@@ -43,6 +46,9 @@
 			margin-top: 10px;
 			margin-bottom: 10px;
 		}
+		#alignments {
+			font-family: "Courier New";
+		}
 	</style>
 </head>
 <body>
@@ -51,6 +57,7 @@
 	Second sequence: <input type="text" id="seq2" placeholder="Sequence 2" /><br>
 	Match value: <input type="number" id="match-score" value="1" /><br>
 	Mismatch value: <input type="number" id="mismatch-score" value="-1" /><br>
+	Gap value: <input type="number" id="gap-score" value="-2" /><br>
 	Global:<input type="radio" name="alignment-type" value="global"  checked="checked" />
 	Local:<input type="radio" name="alignment-type" value="local" /><br>
 	<button type="button" id="submit">Align</button>
@@ -65,6 +72,8 @@
 		$(document).on("click","#submit",function(){
 			// Clear the matrix
 			$("#matrix").empty();
+			// Clear the alignments
+			$("#alignments").empty();
 		
 			// Capture and clean the sequences from the user input
 			var seq1 = $("#seq1").val().trim().toUpperCase();
@@ -77,6 +86,7 @@
 			// Get the values for match and mismatch
 			var match_val = parseInt($("#match-score").val());
 			var mismatch_val = parseInt($("#mismatch-score").val());
+			var gap_val = parseInt($("#gap-score").val());
 			
 			// Get the matrix dimensions
 			var width = seq1.length + 1;
@@ -101,29 +111,34 @@
 					row.append("<td></td>");
 				$("#matrix").append(row);
 			});
-			if($("input[name='alignment-type']:checked").val() == "global")
-				global(seq1,seq2,match_val,mismatch_val);
-			else
-				local(seq1,seq2,match_val,mismatch_val);
+			if($("input[name='alignment-type']:checked").val() == "global") {
+				global(seq1,seq2,match_val,mismatch_val,gap_val);
+				global_traceback(seq1,seq2,$("#matrix td").length-1,[]);
+			}
+			else {
+				var max_indices = local(seq1,seq2,match_val,mismatch_val,gap_val);
+				for(var  i = 0; i < max_indices.length; i++)
+					local_traceback(max_indices[i],[]);
+			}
 		});
 		
-		function global(seq1,seq2,match_val,mismatch_val){
+		function global(seq1,seq2,match_val,mismatch_val,gap_val){
 			var width = seq1.length + 1;
 		
 			// Initialize matrix
 			$("#matrix tr:nth-child(2) td").each(function(i,d){
-				$(d).html("<span class='val'>"+(i*mismatch_val)+"</span>");
+				$(d).html("<span class='val'>"+(i*gap_val)+"</span>");
 			});
 			$("#matrix tr + tr td:nth-child(2)").each(function(i,d){
-				$(d).html("<span class='val'>"+(i*mismatch_val)+"</span>");
+				$(d).html("<span class='val'>"+(i*gap_val)+"</span>");
 			});
 			
 			// Fill matrix
 			var cells = $("#matrix tr:nth-child(1) ~ tr td");
 			cells.each(function(i,d){
 				if(!$(d).html()) {
-					var ins = parseInt($(cells[i-1]).find(".val").html()) + mismatch_val;
-					var del = parseInt($(cells[i-width]).find(".val").html()) + mismatch_val;
+					var ins = parseInt($(cells[i-1]).find(".val").html()) + gap_val;
+					var del = parseInt($(cells[i-width]).find(".val").html()) + gap_val;
 					var match = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() == $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() ? parseInt($(cells[i-width-1]).find(".val").html()) + match_val : parseInt($(cells[i-width-1]).find(".val").html()) + mismatch_val;
 					var max = Math.max(ins,del,match)
 					var val = $("<span></span>")
@@ -138,31 +153,8 @@
 					$(d).append(val);
 				}
 			});
-			
-			// Traceback
-			var i = cells.length - 1;
-			var align_1 = "";
-			var align_2 = "";
-			while($(cells[i]).is("[class*='arrow']")) {
-				if($(cells[i]).hasClass("arrow-left")) {
-					align_1 = "-"+align_1;
-					align_2 = $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() + align_2;
-					i--;
-				}
-				else if($(cells[i]).hasClass("arrow-up")) {
-					align_1 = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() + align_1;
-					align_2 = "-"+align_2;
-					i -= width;
-				}
-				else if($(cells[i]).hasClass("arrow-diagonal")) {
-					align_1 = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() + align_1;
-					align_2 = $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() + align_2;
-					i -= width + 1;
-				}
-			}
-			$("#alignments").html(align_1+"<br>"+align_2);
 		}
-		function local(seq1,seq2,match_val,mismatch_val){
+		function local(seq1,seq2,match_val,mismatch_val,gap_val){
 			var width = seq1.length + 1;
 		
 			//Initialize matrix
@@ -173,12 +165,14 @@
 				$(d).html("<span class='val'>0</span>");
 			});
 			
+			var max_val = 0;
+			var max_indices = [];
 			// Fill the matrix
-			var cells = $("#matrix tr:nth-child(1) ~ tr td");
+			var cells = $("#matrix td");
 			cells.each(function(i,d){
 				if(!$(d).html()) {
-					var ins = parseInt($(cells[i-1]).find(".val").html()) + mismatch_val;
-					var del = parseInt($(cells[i-width]).find(".val").html()) + mismatch_val;
+					var ins = parseInt($(cells[i-1]).find(".val").html()) + gap_val;
+					var del = parseInt($(cells[i-width]).find(".val").html()) + gap_val;
 					var match = $("#matrix tr:first-child th:nth-child("+(i%width+2)+")").html() == $("#matrix tr:nth-child("+(Math.floor(i/width)+2)+") th:first-child").html() ? parseInt($(cells[i-width-1]).find(".val").html()) + match_val : parseInt($(cells[i-width-1]).find(".val").html()) + mismatch_val;
 					var max = Math.max(ins,del,match,0)
 					var val = $("<span></span>")
@@ -193,10 +187,147 @@
 						if(max == match)
 							$(d).addClass("arrow-diagonal");
 					}
+					if(max > max_val) {
+						max_val = max;
+						max_indices = [i];
+					}
+					else if(max == max_val)
+						max_indices.push(i);
 				}
 			});
+			return max_indices;
 		}
-		// Report alignments
+		// Global traceback
+		function global_traceback(seq1,seq2,index,path) {
+			var cell = $($("#matrix td")[index]);
+			
+			// Back track so long as we are not at an edge
+			if(cell.is("[class*='arrow']")) {
+				if(cell.hasClass("arrow-left")) {
+					var new_path = path.slice();
+					new_path.unshift("del");
+					global_traceback(seq1,seq2,index-1,new_path);
+				}
+				if(cell.hasClass("arrow-up")) {
+					var new_path = path.slice();
+					new_path.unshift("ins");
+					global_traceback(seq1,seq2,index - seq1.length - 1,new_path);
+				}
+				if(cell.hasClass("arrow-diagonal")) {
+					var new_path = path.slice();
+					new_path.unshift("mat");
+					global_traceback(seq1,seq2,index - (seq1.length + 2),new_path);
+				}
+			}
+			// Pad the path to the origin
+			else if(index > 0) {
+				if(index == 0){
+					path.unshift("mat");
+					global_traceback(seq1,seq2,index-1,path.slice());
+				}
+				else if(index < seq1.length + 1) {
+					path.unshift("del");
+					global_traceback(seq1,seq2,index-1,path.slice());
+				}
+				else {
+					path.unshift("ins");
+					global_traceback(seq1,seq2,index - seq1.length - 1,path.slice());
+				}
+			}
+			// Once we've reached the origin
+			// Report the alignment
+			else {
+				var align_seq_1 = "";
+				var align_seq_2 = "";
+				var compare_seq = ""
+				var align_index_1 = 0;
+				var align_index_2 = 0;
+				while(path.length > 0) {
+					var step = path.shift();
+					if(step == "ins") {
+						align_seq_1 += "-";
+						align_seq_2 += seq2[align_index_2++];
+						compare_seq += "&nbsp;";
+					}
+					else if(step == "del") {
+						align_seq_1 += seq1[align_index_1++];
+						align_seq_2 += "-";
+						compare_seq += "&nbsp;";
+					}
+					else if(step == "mat") {
+						if(seq1[align_index_1] == seq2[align_index_2])
+							compare_seq += "|";
+						else
+							compare_seq += "X";
+						align_seq_1 += seq1[align_index_1++];
+						align_seq_2 += seq2[align_index_2++];
+					}
+				}
+				$("#alignments").append($("<div></div>").append(align_seq_1));
+				$("#alignments").append($("<div></div>").append(compare_seq));
+				$("#alignments").append($("<div></div>").append(align_seq_2));
+				$("#alignments").append("<br>");
+			}
+		}
+		// Local traceback
+		function local_traceback(index,path) {
+			var width = $("#matrix tr:first-child th").length - 1;
+			var cell = $($("#matrix td")[index]);
+			// Back track so long as we are not at an edge
+			if(cell.is("[class*='arrow']")) {
+				if(cell.hasClass("arrow-left")) {
+					var new_path = path.slice();
+					new_path.unshift("del");
+					local_traceback(index-1,new_path);
+				}
+				if(cell.hasClass("arrow-up")) {
+					var new_path = path.slice();
+					new_path.unshift("ins");
+					local_traceback(index - width - 2,new_path);
+				}
+				if(cell.hasClass("arrow-diagonal")) {
+					var new_path = path.slice();
+					new_path.unshift("mat");
+					local_traceback(index - (width + 1),new_path);
+				}
+			}
+			else {
+				var align_seq_1 = "";
+				var align_seq_2 = "";
+				var compare_seq = "";
+				while(path.length > 0) {
+					var step = path.shift();
+					if(step == "ins") {
+						align_seq_1 += "-";
+						//align_seq_2 += seq2[align_index_2++];
+						align_seq_2 += $("#matrix tr:first-child th:nth-child("+(index%width+2)+")").html();
+						compare_seq += "&nbsp;";
+						index += width;
+					}
+					else if(step == "del") {
+						//align_seq_1 += seq1[align_index_1++];
+						align_seq_1 += $("#matrix tr:nth-child("+(Math.floor(index/width)+2)+") th:first-child").html();
+						align_seq_2 += "-";
+						compare_seq += "&nbsp;";
+						index++;
+					}
+					else if(step == "mat") {
+						if($("#matrix tr:nth-child("+(Math.floor(index/width)+3)+") th:first-child").html() == $("#matrix tr:first-child th:nth-child("+(index%width+3)+")").html())
+							compare_seq += "|";
+						else
+							compare_seq += "X";
+						//align_seq_1 += seq1[align_index_1++];
+						//align_seq_2 += seq2[align_index_2++];
+						align_seq_1 += $("#matrix tr:nth-child("+(Math.floor(index/width)+3)+") th:first-child").html();
+						align_seq_2 += $("#matrix tr:first-child th:nth-child("+(index%width+3)+")").html();
+						index += width + 1;
+					}
+				}
+				$("#alignments").append(align_seq_1+"<br>");
+				$("#alignments").append(compare_seq+"<br>");
+				$("#alignments").append(align_seq_2+"<br><br>");
+			}
+		}
 	</script>
 </body>
 </html>

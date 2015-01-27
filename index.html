@@ -19,7 +19,7 @@
 		}
 		td {
 			background-repeat: no-repeat;
-			background-position: 5px center;
+			background-position: 5px 5px;
 		}
 		.arrow-left {
 			background-image: url("img/left.png");
@@ -49,31 +49,65 @@
 		#alignments {
 			font-family: "Courier New";
 		}
+		input[type='text'] {
+			width: 200px;
+		}
 	</style>
 </head>
 <body>
+	<div style="display: table;">
+		<div style="display: table-row;">
+			<div style="display: table-cell;">First sequence:</div>
+			<div style="display: table-cell;"><input type="text" id="seq1" placeholder="Sequence 1" /></div>
+		</div>
+		<div style="display: table-row;">
+			<div style="display: table-cell;">Second sequence:</div>
+			<div style="display: table-cell;"><input type="text" id="seq2" placeholder="Sequence 2" /></div>
+		</div>
+		<div style="display: table-row;">
+			<div style="display: table-cell;">Match value:</div>
+			<div style="display: table-cell;"><input type="number" id="match-score" value="1" /></div>
+		</div>
+		<div style="display: table-row;">
+			<div style="display: table-cell;">Mismatch value:</div>
+			<div style="display: table-cell;"><input type="number" id="mismatch-score" value="-1" /></div>
+		</div>
+		<div style="display: table-row;">
+			<div style="display: table-cell;">Gap value:</div>
+			<div style="display: table-cell;"><input type="number" id="gap-score" value="-2" /></div>
+		</div>
+		<div style="display: table-row;">
+			Global:<input type="radio" name="alignment-type" value="global"  checked="checked" />
+			Local:<input type="radio" name="alignment-type" value="local" />
+		</div>
+		<div style="display: table-row;">
+			<button type="button" id="submit">Align</button>
+		</div>
+	</div>
 	
-	First sequence: <input type="text" id="seq1" placeholder="Sequence 1" /><br>
-	Second sequence: <input type="text" id="seq2" placeholder="Sequence 2" /><br>
-	Match value: <input type="number" id="match-score" value="1" /><br>
-	Mismatch value: <input type="number" id="mismatch-score" value="-1" /><br>
-	Gap value: <input type="number" id="gap-score" value="-2" /><br>
-	Global:<input type="radio" name="alignment-type" value="global"  checked="checked" />
-	Local:<input type="radio" name="alignment-type" value="local" /><br>
-	<button type="button" id="submit">Align</button>
 	
-	<table id="matrix">
+	<table id="matrix" hidden>
 	</table>
-	<div id="alignments">
+	<div id="alignments" hidden>
 	</div>
 	
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
 	<script>
+		$(document).on("click","[name='gap-toggle']",function(){
+			if($(this).val() == 'static'){
+				$("#static-gap").show();
+				$("#dynamic-gap").hide();
+			}
+			else{
+				$("#static-gap").hide();
+				$("#dynamic-gap").show();
+			}
+		});
 		$(document).on("click","#submit",function(){
 			// Clear the matrix
-			$("#matrix").empty();
+			$("#matrix").empty().fadeOut();
 			// Clear the alignments
-			$("#alignments").empty();
+			$("#alignments").empty().fadeOut();
 		
 			// Capture and clean the sequences from the user input
 			var seq1 = $("#seq1").val().trim().toUpperCase();
@@ -120,6 +154,8 @@
 				for(var  i = 0; i < max_indices.length; i++)
 					local_traceback(max_indices[i],[]);
 			}
+			$("#matrix").fadeIn();
+			$("#alignments").fadeIn();
 		});
 		
 		function global(seq1,seq2,match_val,mismatch_val,gap_val){

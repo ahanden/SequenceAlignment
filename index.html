@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+	<title>Sequence Alignment</title>
 	<style>
 		body{
 			font-family: arial;
@@ -20,6 +21,9 @@
 		td {
 			background-repeat: no-repeat;
 			background-position: 5px 5px;
+		}
+		td.in-path {
+			background-color: #adf;
 		}
 		.arrow-left {
 			background-image: url("img/left.png");
@@ -46,68 +50,87 @@
 			margin-top: 10px;
 			margin-bottom: 10px;
 		}
-		#alignments {
-			font-family: "Courier New";
-		}
 		input[type='text'] {
 			width: 200px;
+		}
+		.wrapper {
+			margin-left: auto;
+			margin-right: auto;
+			max-width: 1140px;
+		}
+		.scrollable {
+			max-width: 1140px;
+			overflow-x: scroll;
+		}
+		.alignment {
+			margin-bottom: 1em;
+			font-family: "Courier New";
+		}
+		.alignment:hover {
+			background-color: #adf;
 		}
 	</style>
 </head>
 <body>
-	<div style="display: table;">
-		<div style="display: table-row;">
-			<div style="display: table-cell;">First sequence:</div>
-			<div style="display: table-cell;"><input type="text" id="seq1" placeholder="Sequence 1" /></div>
+	<div class="wrapper">
+		<h1>Global and Local Sequence Alignment</h1>
+		<div style="display: table;">
+			<div style="display: table-row;">
+				<div style="display: table-cell;">First sequence:</div>
+				<div style="display: table-cell;"><input type="text" id="seq1" placeholder="Sequence 1" /></div>
+			</div>
+			<div style="display: table-row;">
+				<div style="display: table-cell;">Second sequence:</div>
+				<div style="display: table-cell;"><input type="text" id="seq2" placeholder="Sequence 2" /></div>
+			</div>
+			<div style="display: table-row;">
+				<div style="display: table-cell;">Match value:</div>
+				<div style="display: table-cell;"><input type="number" id="match-score" value="1" /></div>
+			</div>
+			<div style="display: table-row;">
+				<div style="display: table-cell;">Mismatch value:</div>
+				<div style="display: table-cell;"><input type="number" id="mismatch-score" value="-1" /></div>
+			</div>
+			<div style="display: table-row;">
+				<div style="display: table-cell;">Gap value:</div>
+				<div style="display: table-cell;"><input type="number" id="gap-score" value="-2" /></div>
+			</div>
+			<div style="display: table-row;">
+				Global:<input type="radio" name="alignment-type" value="global"  checked="checked" />
+				Local:<input type="radio" name="alignment-type" value="local" />
+			</div>
+			<div style="display: table-row;">
+				<button type="button" id="submit">Align</button>
+			</div>
 		</div>
-		<div style="display: table-row;">
-			<div style="display: table-cell;">Second sequence:</div>
-			<div style="display: table-cell;"><input type="text" id="seq2" placeholder="Sequence 2" /></div>
+		<div class="scrollable" hidden>
+			<h2>Dynamic Programming Matrix</h2>
+			<table id="matrix" ></table>
 		</div>
-		<div style="display: table-row;">
-			<div style="display: table-cell;">Match value:</div>
-			<div style="display: table-cell;"><input type="number" id="match-score" value="1" /></div>
-		</div>
-		<div style="display: table-row;">
-			<div style="display: table-cell;">Mismatch value:</div>
-			<div style="display: table-cell;"><input type="number" id="mismatch-score" value="-1" /></div>
-		</div>
-		<div style="display: table-row;">
-			<div style="display: table-cell;">Gap value:</div>
-			<div style="display: table-cell;"><input type="number" id="gap-score" value="-2" /></div>
-		</div>
-		<div style="display: table-row;">
-			Global:<input type="radio" name="alignment-type" value="global"  checked="checked" />
-			Local:<input type="radio" name="alignment-type" value="local" />
-		</div>
-		<div style="display: table-row;">
-			<button type="button" id="submit">Align</button>
+		<div class="scrollable" hidden>
+			<h2>Alignments</h2>
+			<div id="alignments" ></div>
 		</div>
 	</div>
-	
-	
-	<table id="matrix" hidden>
-	</table>
-	<div id="alignments" hidden>
-	</div>
-	
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
 	<script>
-		$(document).on("click","[name='gap-toggle']",function(){
-			if($(this).val() == 'static'){
-				$("#static-gap").show();
-				$("#dynamic-gap").hide();
-			}
-			else{
-				$("#static-gap").hide();
-				$("#dynamic-gap").show();
-			}
+		// Highlighting paths in the matrix
+		$(document).on("mouseout",".alignment",function(){
+			$("#matrix td").removeClass("in-path");
 		});
+		$(document).on("mouseover",".alignment",function(){
+			$("#matrix td").removeClass("in-path");
+			$(this).data("indices").split(",").forEach(function(d){
+				$($("#matrix td")[parseInt(d)]).addClass("in-path");
+			});
+		});
+		// Perform an alignment
 		$(document).on("click","#submit",function(){
+			$(".scrollable").hide();
 			// Clear the matrix
-			$("#matrix").empty().fadeOut();
+			$("#matrix").empty();
 			// Clear the alignments
-			$("#alignments").empty().fadeOut();
+			$("#alignments").empty();
 		
 			// Capture and clean the sequences from the user input
 			var seq1 = $("#seq1").val().trim().toUpperCase();
@@ -147,17 +170,16 @@
 			});
 			if($("input[name='alignment-type']:checked").val() == "global") {
 				global(seq1,seq2,match_val,mismatch_val,gap_val);
-				global_traceback(seq1,seq2,$("#matrix td").length-1,[]);
+				global_traceback(seq1,seq2,$("#matrix td").length-1,[],[]);
 			}
 			else {
 				var max_indices = local(seq1,seq2,match_val,mismatch_val,gap_val);
 				for(var  i = 0; i < max_indices.length; i++)
-					local_traceback(max_indices[i],[]);
+					local_traceback(max_indices[i],[],[]);
 			}
-			$("#matrix").fadeIn();
-			$("#alignments").fadeIn();
+			$(".scrollable").fadeIn();
 		});
-		
+		// Fills the global alignment matrix
 		function global(seq1,seq2,match_val,mismatch_val,gap_val){
 			var width = seq1.length + 1;
 		
@@ -190,6 +212,7 @@
 				}
 			});
 		}
+		// Fills the local alignment matrix
 		function local(seq1,seq2,match_val,mismatch_val,gap_val){
 			var width = seq1.length + 1;
 		
@@ -234,7 +257,10 @@
 			return max_indices;
 		}
 		// Global traceback
-		function global_traceback(seq1,seq2,index,path) {
+		function global_traceback(seq1,seq2,index,path,indices) {
+			var new_indices = indices.slice();
+			new_indices.push(index);
+			new_indices.push(index);
 			var cell = $($("#matrix td")[index]);
 			
 			// Back track so long as we are not at an edge
@@ -242,32 +268,32 @@
 				if(cell.hasClass("arrow-left")) {
 					var new_path = path.slice();
 					new_path.unshift("del");
-					global_traceback(seq1,seq2,index-1,new_path);
+					global_traceback(seq1,seq2,index-1,new_path,new_indices);
 				}
 				if(cell.hasClass("arrow-up")) {
 					var new_path = path.slice();
 					new_path.unshift("ins");
-					global_traceback(seq1,seq2,index - seq1.length - 1,new_path);
+					global_traceback(seq1,seq2,index - seq1.length - 1,new_path,new_indices);
 				}
 				if(cell.hasClass("arrow-diagonal")) {
 					var new_path = path.slice();
 					new_path.unshift("mat");
-					global_traceback(seq1,seq2,index - (seq1.length + 2),new_path);
+					global_traceback(seq1,seq2,index - (seq1.length + 2),new_path,new_indices);
 				}
 			}
 			// Pad the path to the origin
 			else if(index > 0) {
 				if(index == 0){
 					path.unshift("mat");
-					global_traceback(seq1,seq2,index-1,path.slice());
+					global_traceback(seq1,seq2,index-1,path.slice(),new_indices);
 				}
 				else if(index < seq1.length + 1) {
 					path.unshift("del");
-					global_traceback(seq1,seq2,index-1,path.slice());
+					global_traceback(seq1,seq2,index-1,path.slice(),new_indices);
 				}
 				else {
 					path.unshift("ins");
-					global_traceback(seq1,seq2,index - seq1.length - 1,path.slice());
+					global_traceback(seq1,seq2,index - seq1.length - 1,path.slice(),new_indices);
 				}
 			}
 			// Once we've reached the origin
@@ -299,14 +325,13 @@
 						align_seq_2 += seq2[align_index_2++];
 					}
 				}
-				$("#alignments").append($("<div></div>").append(align_seq_1));
-				$("#alignments").append($("<div></div>").append(compare_seq));
-				$("#alignments").append($("<div></div>").append(align_seq_2));
-				$("#alignments").append("<br>");
+				add_alignment(align_seq_1,compare_seq,align_seq_2,new_indices);
 			}
 		}
 		// Local traceback
-		function local_traceback(index,path) {
+		function local_traceback(index,path,indices) {
+			var new_indices = indices.slice();
+			new_indices.push(index);
 			var width = $("#matrix tr:first-child th").length - 1;
 			var cell = $($("#matrix td")[index]);
 			// Back track so long as we are not at an edge
@@ -314,17 +339,17 @@
 				if(cell.hasClass("arrow-left")) {
 					var new_path = path.slice();
 					new_path.unshift("del");
-					local_traceback(index-1,new_path);
+					local_traceback(index-1,new_path,new_indices);
 				}
 				if(cell.hasClass("arrow-up")) {
 					var new_path = path.slice();
 					new_path.unshift("ins");
-					local_traceback(index - width - 2,new_path);
+					local_traceback(index - width - 2,new_path,new_indices);
 				}
 				if(cell.hasClass("arrow-diagonal")) {
 					var new_path = path.slice();
 					new_path.unshift("mat");
-					local_traceback(index - (width + 1),new_path);
+					local_traceback(index - (width + 1),new_path,new_indices);
 				}
 			}
 			else {
@@ -359,10 +384,16 @@
 						index += width + 1;
 					}
 				}
-				$("#alignments").append(align_seq_1+"<br>");
-				$("#alignments").append(compare_seq+"<br>");
-				$("#alignments").append(align_seq_2+"<br><br>");
+				add_alignment(align_seq_1,compare_seq,align_seq_2,indices);
 			}
+		}
+		// Adds an alignment
+		function add_alignment(seq1,align,seq2,indices){
+			var div = $("<div></div>").addClass("alignment").data("indices",indices.join(","));
+			div.append($("<div></div>").append(seq1));
+			div.append($("<div></div>").append(align));
+			div.append($("<div></div>").append(seq2));
+			$("#alignments").append(div);
 		}
 	</script>
 </body>
